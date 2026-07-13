@@ -20,6 +20,16 @@ export function clampToBuffered(t, bufferedEnd) {
   return Math.min(t, Math.max(0, bufferedEnd - 0.1))
 }
 
+// End of the buffered range that is contiguous with the start of the media.
+// Using the LAST range's end is wrong with fragmented buffers ([0,2],[5,7]):
+// a seek into the 2–5 gap has no decoded frames and freezes.
+export function contiguousBufferedEnd(ranges) {
+  for (const [start, end] of ranges || []) {
+    if (start <= 0.1) return end
+  }
+  return 0
+}
+
 // Piecewise-linear interpolation over [[scrollY, videoTime], ...] anchors.
 export function mapTime(map, y) {
   if (!map || map.length < 2) return 0

@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import { clampToBuffered, mapTime, sanitizeAnchors } from './videoMap.js'
+import { clampToBuffered, contiguousBufferedEnd, mapTime, sanitizeAnchors } from './videoMap.js'
+
+describe('contiguousBufferedEnd', () => {
+  it('returns the end of the range contiguous with the media start', () => {
+    expect(contiguousBufferedEnd([[0, 2], [5, 7]])).toBe(2)
+    expect(contiguousBufferedEnd([[0.05, 3]])).toBe(3)
+  })
+
+  it('ignores ranges that do not start at the beginning', () => {
+    expect(contiguousBufferedEnd([[1, 4]])).toBe(0)
+  })
+
+  it('handles empty input', () => {
+    expect(contiguousBufferedEnd([])).toBe(0)
+    expect(contiguousBufferedEnd(null)).toBe(0)
+  })
+})
 
 describe('clampToBuffered', () => {
   it('returns null when nothing is buffered yet', () => {

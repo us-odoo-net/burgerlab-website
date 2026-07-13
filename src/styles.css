@@ -1180,8 +1180,14 @@ button {
    Order drawer (menu + cart)
    ------------------------------------------------------------ */
 
+html.drawer-open,
 body.drawer-open {
   overflow: hidden;
+}
+
+.drawer__menu,
+.drawer__order {
+  overscroll-behavior: contain;
 }
 
 .drawer-backdrop {

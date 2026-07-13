@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { addItem, cartCount, cartTotal, removeItem, setQty } from './cart.js'
 import { burgers } from './data/burgers.js'
 import { initMotion } from './motion.js'
@@ -7,6 +7,12 @@ const LAB_BURGER = { id: 'lab-burger', name: 'The Lab Burger', price: 14.9 }
 const SIDES = [
   { id: 'lab-fries', name: 'Lab Fries', price: 3.5 },
   { id: 'amber-shake', name: 'Amber Shake', price: 4.9 },
+]
+const LAB_BUNDLE_PRICE = 19.9
+const SAMPLE_ORDER = [
+  { ...LAB_BURGER, qty: 1 },
+  { ...SIDES[0], qty: 1 },
+  { ...SIDES[1], qty: 1 },
 ]
 const MENU_ITEMS = [
   { ...LAB_BURGER, desc: 'The flagship. Flame-grilled, molten cheddar, house sauce.' },
@@ -28,7 +34,6 @@ function AddButton({ onAdd, label = 'Add to order', className = '' }) {
         onAdd()
       }}
       onAnimationEnd={() => setAdded(false)}
-      aria-live="polite"
     >
       {added ? 'Added ✓' : label}
     </button>
@@ -119,7 +124,7 @@ function Hero({ onOrderNow, onOpenMenu, onAddLabBurger }) {
               <FavButton name="The Lab Burger" />
             </div>
             <p className="order-card__meta mono">
-              <span className="order-card__price">$14.90</span>
+              <span className="order-card__price">${LAB_BURGER.price.toFixed(2)}</span>
               <span className="order-card__rating">★ 4.9</span>
               <span>25 min</span>
             </p>
@@ -256,14 +261,9 @@ const STEPS = [
 
 const CATEGORIES = ['Burgers', 'Sides', 'Shakes', 'Limited runs']
 
-function Experience({ cart, onOpenOrder }) {
-  const showcase = cart.length
-    ? cart
-    : [
-        { ...LAB_BURGER, qty: 1 },
-        { ...SIDES[0], qty: 1 },
-        { ...SIDES[1], qty: 1 },
-      ]
+function Experience({ cart, onOpenOrder, onStartSample }) {
+  const hasCart = cart.length > 0
+  const showcase = hasCart ? cart : SAMPLE_ORDER
   const total = cartTotal(showcase)
   return (
     <section className="experience section" id="experience">
@@ -295,8 +295,8 @@ function Experience({ cart, onOpenOrder }) {
         </div>
         <aside className="summary-card floating-ui panel" data-reveal aria-label="Order summary">
           <header className="summary-card__head">
-            <h3>Your order</h3>
-            <span className="mono summary-card__tag">Lab #0042</span>
+            <h3>{hasCart ? 'Your order' : 'Sample order'}</h3>
+            <span className="mono summary-card__tag">{hasCart ? 'Lab #0042' : 'popular combo'}</span>
           </header>
           <ul className="summary-card__lines">
             {showcase.map((l) => (
@@ -312,8 +312,12 @@ function Experience({ cart, onOpenOrder }) {
             <span>Total</span>
             <span className="mono">${total.toFixed(2)}</span>
           </div>
-          <button type="button" className="btn btn--primary summary-card__checkout" onClick={onOpenOrder}>
-            {cart.length ? 'Review & checkout' : 'Start this order'}
+          <button
+            type="button"
+            className="btn btn--primary summary-card__checkout"
+            onClick={hasCart ? onOpenOrder : onStartSample}
+          >
+            {hasCart ? 'Review & checkout' : 'Start this order'}
           </button>
           <p className="summary-card__note mono">demo interface — fictional brand</p>
         </aside>
@@ -349,7 +353,7 @@ function CTA({ onOrderNow, onOpenMenu }) {
         Reassembled to perfection. Delivered while the cheddar is still molten.
       </p>
       <p className="cta__bundle mono" data-reveal>
-        The Lab Bundle — burger + fries + shake · <strong>$19.90</strong>
+        The Lab Bundle — burger + fries + shake · <strong>${LAB_BUNDLE_PRICE.toFixed(2)}</strong>
       </p>
       <div className="cta__actions" data-reveal>
         <button type="button" className="btn btn--primary btn--lg" onClick={onOrderNow}>
@@ -383,8 +387,14 @@ function Footer() {
   )
 }
 
-function Drawer({ open, tab, cart, onTab, onClose, onAdd, onSetQty, onRemove }) {
+function Drawer({ open, tab, cart, onTab, onClose, onAdd, onSetQty, onRemove, onClear }) {
   const panelRef = useRef(null)
+  // Ref keeps the open-effect's deps to [open] only: cart interactions
+  // re-render App (new onClose identity) and must NOT re-run the effect —
+  // that would steal focus and re-dispatch the lenis stop/start events.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const restoreFocusRef = useRef(null)
   const [placed, setPlaced] = useState(false)
   const count = cartCount(cart)
   const total = cartTotal(cart)
@@ -392,19 +402,41 @@ function Drawer({ open, tab, cart, onTab, onClose, onAdd, onSetQty, onRemove }) 
   useEffect(() => {
     if (!open) return undefined
     setPlaced(false)
+    restoreFocusRef.current = document.activeElement
     document.body.classList.add('drawer-open')
+    document.documentElement.classList.add('drawer-open')
     document.dispatchEvent(new CustomEvent('burgerlab:drawer', { detail: { open: true } }))
     panelRef.current?.focus()
     const onKey = (e) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') {
+        onCloseRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+      // Minimal focus trap: aria-modal promises the background is unreachable.
+      const panel = panelRef.current
+      if (!panel) return
+      const focusables = panel.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')
+      if (!focusables.length) return
+      const first = focusables[0]
+      const last = focusables[focusables.length - 1]
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === panel)) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKey)
     return () => {
       document.body.classList.remove('drawer-open')
+      document.documentElement.classList.remove('drawer-open')
       document.dispatchEvent(new CustomEvent('burgerlab:drawer', { detail: { open: false } }))
       document.removeEventListener('keydown', onKey)
+      restoreFocusRef.current?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
@@ -420,11 +452,12 @@ function Drawer({ open, tab, cart, onTab, onClose, onAdd, onSetQty, onRemove }) 
         ref={panelRef}
       >
         <header className="drawer__head">
-          <div className="drawer__tabs" role="tablist" aria-label="Order sections">
+          {/* Plain toggle buttons: a full ARIA tabs pattern needs tabpanels +
+              arrow-key roving focus; half-implementing it is worse for SRs. */}
+          <div className="drawer__tabs" aria-label="Order sections">
             <button
               type="button"
-              role="tab"
-              aria-selected={tab === 'menu'}
+              aria-pressed={tab === 'menu'}
               className={`drawer__tab mono ${tab === 'menu' ? 'is-active' : ''}`}
               onClick={() => onTab('menu')}
             >
@@ -432,8 +465,7 @@ function Drawer({ open, tab, cart, onTab, onClose, onAdd, onSetQty, onRemove }) 
             </button>
             <button
               type="button"
-              role="tab"
-              aria-selected={tab === 'order'}
+              aria-pressed={tab === 'order'}
               className={`drawer__tab mono ${tab === 'order' ? 'is-active' : ''}`}
               onClick={() => onTab('order')}
             >
@@ -502,7 +534,14 @@ function Drawer({ open, tab, cart, onTab, onClose, onAdd, onSetQty, onRemove }) 
                   <span>Total</span>
                   <span className="mono">${total.toFixed(2)}</span>
                 </div>
-                <button type="button" className="btn btn--primary drawer__checkout" onClick={() => setPlaced(true)}>
+                <button
+                  type="button"
+                  className="btn btn--primary drawer__checkout"
+                  onClick={() => {
+                    setPlaced(true)
+                    onClear()
+                  }}
+                >
                   Checkout — ${total.toFixed(2)}
                 </button>
               </>
@@ -539,13 +578,21 @@ export default function App() {
     return cleanup
   }, [])
 
-  const add = (item) => setCart((c) => addItem(c, item))
-  const openOrder = () => setDrawerTab('order')
-  const openMenu = () => setDrawerTab('menu')
-  const orderLabBurgerNow = () => {
+  // Stable identities: Drawer's open-effect and memo-friendly children must
+  // not see a new callback on every cart re-render.
+  const add = useCallback((item) => setCart((c) => addItem(c, item)), [])
+  const openOrder = useCallback(() => setDrawerTab('order'), [])
+  const openMenu = useCallback(() => setDrawerTab('menu'), [])
+  const closeDrawer = useCallback(() => setDrawerTab(null), [])
+  const clearCart = useCallback(() => setCart([]), [])
+  const orderLabBurgerNow = useCallback(() => {
     setCart((c) => (c.some((l) => l.id === LAB_BURGER.id) ? c : addItem(c, LAB_BURGER)))
     setDrawerTab('order')
-  }
+  }, [])
+  const startSampleOrder = useCallback(() => {
+    setCart((c) => (c.length ? c : SAMPLE_ORDER.map((l) => ({ ...l }))))
+    setDrawerTab('order')
+  }, [])
 
   return (
     <div className="page">
@@ -558,7 +605,7 @@ export default function App() {
         <Split />
         <Ingredients />
         <Catalog onAdd={add} />
-        <Experience cart={cart} onOpenOrder={openOrder} />
+        <Experience cart={cart} onOpenOrder={openOrder} onStartSample={startSampleOrder} />
         <CTA onOrderNow={orderLabBurgerNow} onOpenMenu={openMenu} />
       </main>
       <Footer />
@@ -567,10 +614,11 @@ export default function App() {
         tab={drawerTab ?? 'order'}
         cart={cart}
         onTab={setDrawerTab}
-        onClose={() => setDrawerTab(null)}
+        onClose={closeDrawer}
         onAdd={add}
         onSetQty={(id, q) => setCart((c) => setQty(c, id, q))}
         onRemove={(id) => setCart((c) => removeItem(c, id))}
+        onClear={clearCart}
       />
       <div className="custom-cursor" aria-hidden="true"></div>
     </div>

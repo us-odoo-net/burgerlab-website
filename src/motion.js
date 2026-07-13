@@ -1,7 +1,7 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
-import { clampToBuffered, mapTime, sanitizeAnchors } from './videoMap.js'
+import { clampToBuffered, contiguousBufferedEnd, mapTime, sanitizeAnchors } from './videoMap.js'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -40,6 +40,9 @@ function boot() {
   let lenis = null
   if (!reduced) {
     lenis = new Lenis({ duration: 1.12, smoothWheel: true, wheelMultiplier: 0.9 })
+    // A breakpoint re-boot can happen while the order drawer is open: the new
+    // Lenis must be born stopped or the background scrolls behind the dialog.
+    if (document.body.classList.contains('drawer-open')) lenis.stop()
     lenis.on('scroll', ScrollTrigger.update)
     const raf = (time) => lenis.raf(time * 1000)
     gsap.ticker.add(raf)
@@ -163,7 +166,9 @@ function boot() {
     const bufferedEnd = () => {
       try {
         const b = bgVideo.buffered
-        return b.length ? b.end(b.length - 1) : 0
+        const ranges = []
+        for (let i = 0; i < b.length; i++) ranges.push([b.start(i), b.end(i)])
+        return contiguousBufferedEnd(ranges)
       } catch {
         return 0
       }
