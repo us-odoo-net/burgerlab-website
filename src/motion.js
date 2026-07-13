@@ -13,9 +13,9 @@
  *   all-keyframe (every frame an I-frame) so seeks are O(1) and exact.
  * - MODES: 'full' (Lenis smoothing + pin + reveals + cursor), 'reduced'
  *   (prefers-reduced-motion: scrub stays ON — it is user-driven content, not
- *   autoplay motion — smoothing/pin/decoration off), 'mobile' (static poster,
- *   no video download at all). Mode is stamped on <html data-motion> for
- *   one-line remote diagnosis.
+ *   autoplay motion — smoothing/pin/decoration off), 'mobile' (native touch
+ *   scroll, no pin/cursor, lighter 640×360 film variant — the film still
+ *   scrubs). Mode is stamped on <html data-motion> for one-line diagnosis.
  * - OWNERSHIP: every ScrollTrigger/tween/listener created here is tracked and
  *   killed by THIS module's teardown — no global GSAP sweeps, so it composes
  *   safely with any other GSAP code on the page.
@@ -129,8 +129,19 @@ function boot() {
   const fill = document.getElementById('preloader-fill')
   const bgVideo = document.querySelector('#bgv')
   const hidePreloader = () => preloader && preloader.classList.add('preloader--done')
+  // Mobile scrubs too (owner decision superseding the original guideline's
+  // static-poster fallback): a 1.8MB 640×360 variant keeps data cost low.
+  // lastVideoT is (re)declared fresh in the scrub block of this same boot,
+  // so a src swap needs no extra state reset.
+  if (bgVideo) {
+    const wantedSrc = isMobile && bgVideo.dataset.mobileSrc ? bgVideo.dataset.mobileSrc : 'bg.mp4'
+    if (!bgVideo.currentSrc || !bgVideo.currentSrc.endsWith(wantedSrc)) {
+      bgVideo.src = wantedSrc
+    }
+  }
+
   if (preloader && !preloader.classList.contains('preloader--done')) {
-    if (bgVideo && !isMobile) {
+    if (bgVideo) {
       bgVideo.preload = 'auto'
       const onProgress = () => {
         try {
@@ -165,11 +176,11 @@ function boot() {
   // hero=assembled, split pin=full separation, ingredients/catalog=hold
   // exploded, experience→cta=reassembly. Pure math lives in videoMap.js.
   // The scrub is user-driven content (scroll = film position), not autoplay
-  // motion — so it stays ON under prefers-reduced-motion; only smoothing,
-  // pinning and decorative animations are dropped there.
+  // motion — so it stays ON in ALL modes: reduced-motion drops only
+  // smoothing/pin/decoration, and mobile just loads the lighter variant.
   let lastVideoT = -1
   let videoMap = null
-  if (bgVideo && !isMobile) {
+  if (bgVideo) {
     const buildVideoMap = () => {
       const dur = (bgVideo.duration || 8) - 0.05
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight
@@ -229,11 +240,20 @@ function boot() {
     window.addEventListener('scroll', updateVideo, { passive: true })
     bgVideo.addEventListener('loadedmetadata', remap)
     bgVideo.addEventListener('progress', updateVideo)
+    // iOS renders no frames on a never-played video: a muted play()→pause()
+    // on the first touch (a user gesture) unlocks seek rendering. No-op on
+    // Android/desktop.
+    const iosUnlock = () => {
+      const p = bgVideo.play()
+      if (p && p.then) p.then(() => bgVideo.pause()).catch(() => {})
+    }
+    window.addEventListener('touchstart', iosUnlock, { once: true, passive: true })
     cleanups.push(() => {
       ScrollTrigger.removeEventListener('refresh', remap)
       window.removeEventListener('scroll', updateVideo)
       bgVideo.removeEventListener('loadedmetadata', remap)
       bgVideo.removeEventListener('progress', updateVideo)
+      window.removeEventListener('touchstart', iosUnlock)
     })
   }
 

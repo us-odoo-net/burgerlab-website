@@ -138,10 +138,6 @@ button {
     linear-gradient(180deg, rgba(16, 16, 15, 0.72) 0%, rgba(16, 16, 15, 0.22) 24%, rgba(16, 16, 15, 0.22) 68%, rgba(16, 16, 15, 0.76) 100%);
 }
 
-.mobile-poster {
-  display: none;
-}
-
 .ambient-dots {
   position: fixed;
   inset: 0;
@@ -1523,19 +1519,8 @@ body.drawer-open {
 }
 
 @media (hover: none) and (pointer: coarse), (max-width: 768px) {
-  .bg-video {
-    display: none;
-  }
-
-  .mobile-poster {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    background-size: cover;
-    background-position: center 38%;
-  }
-
+  /* The film stays (lighter 640×360 variant loaded by motion.js) — only
+     pin, HUD labels and cursor are dropped on mobile. */
   .nav__links {
     display: none;
   }
