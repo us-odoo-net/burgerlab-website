@@ -100,22 +100,90 @@ button {
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(120% 90% at 50% 42%, transparent 0%, rgba(16, 16, 15, 0.55) 62%, rgba(16, 16, 15, 0.92) 100%),
-    linear-gradient(180deg, rgba(16, 16, 15, 0.62) 0%, rgba(16, 16, 15, 0.18) 22%, rgba(16, 16, 15, 0.18) 70%, rgba(16, 16, 15, 0.7) 100%);
+    radial-gradient(120% 90% at 50% 42%, transparent 0%, rgba(16, 16, 15, 0.6) 60%, rgba(16, 16, 15, 0.94) 100%),
+    linear-gradient(180deg, rgba(16, 16, 15, 0.72) 0%, rgba(16, 16, 15, 0.22) 24%, rgba(16, 16, 15, 0.22) 68%, rgba(16, 16, 15, 0.76) 100%);
 }
 
 .mobile-poster {
   display: none;
 }
 
+.ambient-dots {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    radial-gradient(2px 2px at 18% 26%, rgba(245, 179, 26, 0.5), transparent 100%),
+    radial-gradient(1.5px 1.5px at 82% 18%, rgba(245, 179, 26, 0.35), transparent 100%),
+    radial-gradient(2px 2px at 68% 72%, rgba(255, 106, 42, 0.3), transparent 100%),
+    radial-gradient(1.5px 1.5px at 32% 84%, rgba(245, 179, 26, 0.4), transparent 100%);
+  background-size: 720px 720px;
+  background-repeat: repeat;
+}
+
+/* Grain without mix-blend-mode: a fixed full-viewport blend layer forces a
+   recomposite against everything scrolling under it on every frame. */
 .grain {
   position: fixed;
   inset: -60px;
   z-index: 2;
   pointer-events: none;
-  opacity: 0.5;
-  mix-blend-mode: overlay;
+  opacity: 0.3;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140' viewBox='0 0 140 140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.32'/%3E%3C/svg%3E");
+}
+
+/* ------------------------------------------------------------
+   Preloader (word + video buffer bar; hidden once bg.mp4 can play)
+   ------------------------------------------------------------ */
+
+.preloader {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  background: var(--bg);
+  transition: opacity 0.6s ease, visibility 0.6s ease;
+}
+
+.preloader__word {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: clamp(2rem, 6vw, 3.4rem);
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.preloader__word b {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.preloader__bar {
+  width: min(280px, 60vw);
+  height: 2px;
+  background: rgba(248, 244, 234, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.preloader__bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transition: width 0.3s ease;
+}
+
+.preloader--done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .page {
@@ -213,7 +281,28 @@ button {
   font-size: 0.92rem;
   letter-spacing: 0.01em;
   transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
-  will-change: transform;
+}
+
+/* "Added ✓" runs this one-shot animation; React flips state back on animationend. */
+.btn.is-added {
+  animation: added-flash 1.6s ease forwards;
+}
+
+@keyframes added-flash {
+  0% {
+    border-color: var(--green);
+    color: var(--green);
+    transform: translateY(-1px);
+  }
+  80% {
+    border-color: var(--green);
+    color: var(--green);
+  }
+  100% {
+    border-color: rgba(248, 244, 234, 0.16);
+    color: var(--text);
+    transform: none;
+  }
 }
 
 .btn--primary {
@@ -228,11 +317,9 @@ button {
 }
 
 .btn--ghost {
-  background: rgba(32, 32, 29, 0.55);
+  background: rgba(32, 32, 29, 0.72);
   border: 1px solid rgba(248, 244, 234, 0.16);
   color: var(--text);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
 }
 
 .btn--ghost:hover {
@@ -256,6 +343,32 @@ button {
   letter-spacing: 0.28em;
   text-transform: uppercase;
   color: var(--accent);
+  text-shadow: 0 1px 14px rgba(16, 16, 15, 0.9);
+}
+
+/* Shared premium panel (doc: "Dark premium UI components") */
+.panel {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(32, 32, 29, 0.88), rgba(18, 18, 16, 0.78));
+  border: 1px solid rgba(245, 179, 26, 0.12);
+  border-radius: var(--radius);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.38);
+}
+
+.panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(245, 179, 26, 0.12), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent 42%);
+  pointer-events: none;
+}
+
+.panel > * {
+  position: relative;
+  z-index: 1;
 }
 
 .section {
@@ -285,15 +398,104 @@ button {
    ------------------------------------------------------------ */
 
 .hero {
+  position: relative;
   min-height: 100svh;
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: 22px;
+  align-items: center;
   max-width: var(--maxw);
   margin: 0 auto;
   padding: 120px var(--pad) 80px;
+}
+
+.hero__grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: clamp(28px, 5vw, 72px);
+  align-items: center;
+  width: 100%;
+}
+
+.hero__copy {
+  display: grid;
+  gap: 22px;
+  justify-items: start;
+}
+
+/* Floating quick-order card (doc: "floating order card inspired by the UI reference") */
+.floating-ui {
+  position: relative;
+  z-index: 20;
+}
+
+.order-card {
+  max-width: 340px;
+  justify-self: end;
+  width: 100%;
+}
+
+.order-card__imgwrap img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+}
+
+.order-card__body {
+  display: grid;
+  gap: 10px;
+  padding: 18px 20px 20px;
+}
+
+.order-card__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-card__name {
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.order-card__meta {
+  display: flex;
+  gap: 16px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.order-card__price {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.order-card__rating {
+  color: var(--accent);
+}
+
+.fav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(248, 244, 234, 0.18);
+  background: rgba(16, 16, 15, 0.6);
+  color: var(--muted);
+  transition: color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.fav-btn:hover {
+  transform: scale(1.08);
+  border-color: rgba(240, 68, 56, 0.5);
+}
+
+.fav-btn.is-fav {
+  color: var(--danger);
+  border-color: rgba(240, 68, 56, 0.6);
 }
 
 .hero__title {
@@ -344,9 +546,7 @@ button {
   padding: 8px 14px;
   border-radius: 999px;
   border: 1px solid rgba(245, 179, 26, 0.22);
-  background: rgba(24, 24, 22, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(24, 24, 22, 0.72);
 }
 
 .hero__scrollhint {
@@ -384,10 +584,6 @@ button {
     transform-origin: top;
     opacity: 1;
   }
-}
-
-.hero {
-  position: relative;
 }
 
 /* ------------------------------------------------------------
@@ -435,7 +631,6 @@ button {
 .split .w {
   display: inline-block;
   opacity: 0.12;
-  will-change: opacity, transform, filter;
 }
 
 .ing-label {
@@ -446,7 +641,6 @@ button {
   font-family: var(--font-mono);
   color: var(--text);
   opacity: 0;
-  will-change: opacity, transform;
 }
 
 .ing-label--l {
@@ -512,11 +706,6 @@ button {
 .ingredients__media {
   position: sticky;
   top: 14vh;
-  border-radius: var(--radius);
-  overflow: hidden;
-  border: 1px solid rgba(245, 179, 26, 0.14);
-  background: var(--surface-soft);
-  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.8);
 }
 
 .ingredients__media img {
@@ -535,24 +724,37 @@ button {
 .ingredients__list {
   list-style: none;
   display: grid;
+  gap: 14px;
 }
 
 .ingredients__item {
   display: flex;
-  gap: 22px;
-  padding: 26px 6px;
-  border-bottom: 1px solid rgba(53, 51, 45, 0.8);
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px 22px;
+  border-radius: 20px;
+  transition: border-color 0.3s ease, transform 0.3s ease;
 }
 
-.ingredients__item:first-child {
-  padding-top: 6px;
+.ingredients__item:hover {
+  border-color: rgba(245, 179, 26, 0.35);
+  transform: translateY(-3px);
+}
+
+.ingredients__dot {
+  width: 7px;
+  height: 7px;
+  margin-top: 9px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 12px rgba(245, 179, 26, 0.7);
+  flex-shrink: 0;
 }
 
 .ingredients__num {
-  font-family: var(--font-mono);
   font-size: 0.72rem;
   color: var(--accent);
-  padding-top: 6px;
+  padding-top: 5px;
 }
 
 .ingredients__item h3 {
@@ -578,14 +780,7 @@ button {
 }
 
 .burger-card {
-  border-radius: var(--radius);
-  overflow: hidden;
-  background: linear-gradient(180deg, rgba(32, 32, 29, 0.88), rgba(18, 18, 16, 0.78));
-  border: 1px solid rgba(245, 179, 26, 0.12);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   transition: transform 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
-  will-change: transform;
 }
 
 .burger-card:hover {
@@ -616,11 +811,15 @@ button {
   left: 14px;
   padding: 7px 12px;
   border-radius: 999px;
-  background: rgba(16, 16, 15, 0.72);
+  background: rgba(16, 16, 15, 0.8);
   border: 1px solid rgba(245, 179, 26, 0.3);
   color: var(--accent);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+}
+
+.burger-card__imgwrap .fav-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
 }
 
 .burger-card__body {
@@ -671,43 +870,147 @@ button {
    Experience
    ------------------------------------------------------------ */
 
-.experience__steps {
+.experience__grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: clamp(18px, 2.5vw, 28px);
+  grid-template-columns: 1.35fr 1fr;
+  gap: clamp(24px, 4vw, 48px);
+  align-items: start;
   margin-bottom: clamp(28px, 5vh, 48px);
 }
 
-.step {
-  border-radius: var(--radius);
-  padding: 28px 26px;
-  background: linear-gradient(180deg, rgba(32, 32, 29, 0.82), rgba(18, 18, 16, 0.72));
+.experience__flow {
+  display: grid;
+  gap: 16px;
+}
+
+.experience__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.chip {
+  padding: 9px 16px;
+  border-radius: 999px;
   border: 1px solid rgba(53, 51, 45, 0.9);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(24, 24, 22, 0.72);
+  color: var(--muted);
+  transition: color 0.2s ease, border-color 0.2s ease;
+  cursor: default;
+}
+
+.chip--active {
+  color: #191204;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.experience__line {
+  color: var(--muted);
+  max-width: 46ch;
+  text-shadow: 0 2px 18px rgba(16, 16, 15, 0.9);
+}
+
+.step {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  border-radius: 22px;
+  padding: 22px 24px;
   transition: border-color 0.3s ease, transform 0.3s ease;
 }
 
 .step:hover {
   border-color: rgba(245, 179, 26, 0.35);
-  transform: translateY(-4px);
+  transform: translateY(-3px);
 }
 
 .step__num {
   color: var(--accent-2);
   font-size: 0.78rem;
+  padding-top: 5px;
 }
 
 .step h3 {
   font-family: var(--font-head);
-  font-size: 1.22rem;
+  font-size: 1.15rem;
   font-weight: 600;
-  margin: 12px 0 8px;
+  margin-bottom: 6px;
 }
 
 .step p {
   color: var(--muted);
   font-size: 0.94rem;
+}
+
+/* Order summary card (doc: "featured order summary card") */
+.summary-card {
+  position: sticky;
+  top: 14vh;
+  display: grid;
+  gap: 16px;
+  padding: 24px 26px 26px;
+}
+
+.summary-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-card__head h3 {
+  font-family: var(--font-head);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.summary-card__tag {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.summary-card__lines {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+
+.summary-card__lines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 0.94rem;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(53, 51, 45, 0.7);
+}
+
+.summary-card__qty {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.summary-card__total {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 1.02rem;
+}
+
+.summary-card__total .mono {
+  color: var(--accent);
+}
+
+.summary-card__checkout {
+  width: 100%;
+}
+
+.summary-card__note {
+  color: var(--muted);
+  font-size: 0.62rem;
+  text-align: center;
+  opacity: 0.7;
 }
 
 .experience__stats {
@@ -772,6 +1075,20 @@ button {
   text-shadow: 0 2px 24px rgba(16, 16, 15, 0.9);
 }
 
+.cta__bundle {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 179, 26, 0.3);
+  background: rgba(24, 24, 22, 0.72);
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.cta__bundle strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .cta__actions {
   display: flex;
   flex-wrap: wrap;
@@ -786,8 +1103,20 @@ button {
 
 .footer {
   position: relative;
-  background: linear-gradient(180deg, rgba(16, 16, 15, 0) 0%, rgba(16, 16, 15, 0.9) 26%, var(--bg) 60%);
-  padding-top: 120px;
+  background: var(--bg);
+  margin-top: 24vh;
+  padding-top: 40px;
+}
+
+.footer::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 45vh;
+  background: linear-gradient(to bottom, transparent, var(--bg));
+  pointer-events: none;
 }
 
 .footer__inner {
@@ -856,6 +1185,14 @@ button {
    ------------------------------------------------------------ */
 
 @media (max-width: 980px) {
+  .hero__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .order-card {
+    justify-self: start;
+  }
+
   .ingredients__grid {
     grid-template-columns: 1fr;
   }
@@ -864,9 +1201,13 @@ button {
     position: static;
   }
 
-  .experience__steps,
+  .experience__grid,
   .experience__stats {
     grid-template-columns: 1fr;
+  }
+
+  .summary-card {
+    position: static;
   }
 }
 

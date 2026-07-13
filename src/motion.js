@@ -1,13 +1,35 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
+import { mapTime, sanitizeAnchors } from './videoMap.js'
 
 gsap.registerPlugin(ScrollTrigger)
 
+const MOBILE_MQ = '(hover: none), (max-width: 768px)'
+
+// Re-runs the whole motion setup when the viewport crosses the mobile
+// breakpoint (pin spacers, video scrub and cursor are mode-dependent).
 export function initMotion() {
+  const mq = window.matchMedia(MOBILE_MQ)
+  let teardown = boot()
+  const onModeChange = () => {
+    teardown()
+    teardown = boot()
+    ScrollTrigger.refresh()
+  }
+  mq.addEventListener('change', onModeChange)
+  return () => {
+    mq.removeEventListener('change', onModeChange)
+    teardown()
+  }
+}
+
+function boot() {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const isMobile = window.matchMedia('(hover: none), (max-width: 768px)').matches
+  const isMobile = window.matchMedia(MOBILE_MQ).matches
   const cleanups = []
+  const triggers = [] // ScrollTriggers owned by this boot
+  const tweens = [] // tweens/timelines owned by this boot
 
   // ----- Lenis <-> GSAP wiring -----
   let lenis = null
@@ -23,31 +45,86 @@ export function initMotion() {
     })
   }
 
+  // ----- Smooth anchor navigation through Lenis -----
+  const onAnchorClick = (e) => {
+    const a = e.target.closest('a[href^="#"]')
+    if (!a) return
+    const target = document.querySelector(a.getAttribute('href'))
+    if (!target) return
+    e.preventDefault()
+    if (lenis) lenis.scrollTo(target, { offset: 0 })
+    else target.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth' })
+  }
+  document.addEventListener('click', onAnchorClick)
+  cleanups.push(() => document.removeEventListener('click', onAnchorClick))
+
   // ----- Nav state -----
   const nav = document.querySelector('.nav')
   if (nav) {
-    ScrollTrigger.create({
-      start: 60,
-      end: 'max',
-      onToggle: (self) => nav.classList.toggle('nav--scrolled', self.isActive),
-    })
+    triggers.push(
+      ScrollTrigger.create({
+        start: 60,
+        end: 'max',
+        onToggle: (self) => nav.classList.toggle('nav--scrolled', self.isActive),
+      }),
+    )
   }
 
   // ----- Global progress bar -----
   const bar = document.querySelector('#progress-bar')
   if (bar) {
-    gsap.to(bar, {
+    const t = gsap.to(bar, {
       scaleX: 1,
       ease: 'none',
       scrollTrigger: { trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: 0.3 },
     })
+    tweens.push(t)
+    triggers.push(t.scrollTrigger)
+  }
+
+  // ----- Preloader + video load gate -----
+  // Video ships with preload="none" so mobile never downloads it (it is
+  // display:none there). Desktop starts the download here, behind the
+  // preloader, and reveals the page when the clip can play through.
+  const preloader = document.getElementById('preloader')
+  const fill = document.getElementById('preloader-fill')
+  const bgVideo = document.querySelector('#bgv')
+  const hidePreloader = () => preloader && preloader.classList.add('preloader--done')
+  if (preloader && !preloader.classList.contains('preloader--done')) {
+    if (bgVideo && !isMobile && !reduced) {
+      bgVideo.preload = 'auto'
+      const onProgress = () => {
+        try {
+          if (fill && bgVideo.buffered.length && bgVideo.duration) {
+            const end = bgVideo.buffered.end(bgVideo.buffered.length - 1)
+            fill.style.width = `${Math.min(100, (end / bgVideo.duration) * 100)}%`
+          }
+        } catch {
+          /* buffered ranges can be briefly inconsistent during load */
+        }
+      }
+      const onReady = () => hidePreloader()
+      bgVideo.addEventListener('progress', onProgress)
+      bgVideo.addEventListener('canplaythrough', onReady, { once: true })
+      bgVideo.addEventListener('error', onReady, { once: true })
+      // Failsafe: degrade to the poster if the network stalls without events.
+      const failsafe = setTimeout(onReady, 8000) // # oneshot failsafe, not polling
+      bgVideo.load()
+      cleanups.push(() => {
+        clearTimeout(failsafe)
+        bgVideo.removeEventListener('progress', onProgress)
+        bgVideo.removeEventListener('canplaythrough', onReady)
+        bgVideo.removeEventListener('error', onReady)
+      })
+    } else {
+      hidePreloader()
+    }
   }
 
   // ----- Background video scrub -----
   // Piecewise scroll→time map so the story beats land on the right sections:
-  // hero=assembled, split pin=full separation, ingredients/catalog=hold exploded,
-  // experience→cta=reassembly. Falls back to linear if anchors are missing.
-  const bgVideo = document.querySelector('#bgv')
+  // hero=assembled, split pin=full separation, ingredients/catalog=hold
+  // exploded, experience→cta=reassembly. Pure math lives in videoMap.js.
   let lastVideoT = -1
   let videoMap = null
   if (bgVideo && !isMobile && !reduced) {
@@ -64,27 +141,15 @@ export function initMotion() {
         raw.push([ctaEnter, Math.min(6.6, dur)])
       }
       raw.push([maxScroll, dur])
-      videoMap = raw.filter((p, i, a) => i === 0 || p[0] > a[i - 1][0] + 1)
-    }
-    const mapTime = (y) => {
-      const m = videoMap
-      if (!m || m.length < 2) return 0
-      if (y <= m[0][0]) return m[0][1]
-      for (let i = 1; i < m.length; i++) {
-        if (y <= m[i][0]) {
-          const [y0, t0] = m[i - 1]
-          const [y1, t1] = m[i]
-          return t0 + ((y - y0) / Math.max(1, y1 - y0)) * (t1 - t0)
-        }
-      }
-      return m[m.length - 1][1]
+      videoMap = sanitizeAnchors(raw)
     }
     const updateVideo = () => {
       if (!bgVideo.duration) return
       if (!videoMap) buildVideoMap()
       const scrollTop = window.scrollY || document.documentElement.scrollTop
-      const t = mapTime(scrollTop)
-      if (Math.abs(t - lastVideoT) > 0.008) {
+      const t = mapTime(videoMap, scrollTop)
+      // ~0.84 frame at 24fps: skips sub-frame seeks that repaint nothing.
+      if (Math.abs(t - lastVideoT) > 0.035) {
         bgVideo.currentTime = t
         lastVideoT = t
       }
@@ -95,13 +160,15 @@ export function initMotion() {
     }
     bgVideo.pause()
     bgVideo.currentTime = 0
-    ScrollTrigger.create({
-      trigger: document.body,
-      start: 'top top',
-      end: 'bottom bottom',
-      scrub: true,
-      onUpdate: updateVideo,
-    })
+    triggers.push(
+      ScrollTrigger.create({
+        trigger: document.body,
+        start: 'top top',
+        end: 'bottom bottom',
+        scrub: true,
+        onUpdate: updateVideo,
+      }),
+    )
     ScrollTrigger.addEventListener('refresh', remap)
     window.addEventListener('scroll', updateVideo, { passive: true })
     bgVideo.addEventListener('loadedmetadata', remap)
@@ -127,6 +194,7 @@ export function initMotion() {
         end: () => '+=' + window.innerHeight * 2.6,
         pin: true,
         scrub: 1,
+        invalidateOnRefresh: true,
         onUpdate: (self) => {
           if (counter) counter.textContent = String(Math.round(self.progress * 100)).padStart(3, '0') + '%'
         },
@@ -146,6 +214,9 @@ export function initMotion() {
       0.25,
     )
     tl.to(words, { opacity: 0.25, duration: 0.3, ease: 'power1.in' }, 0.85)
+
+    tweens.push(tl)
+    triggers.push(tl.scrollTrigger)
   }
 
   // ----- Section reveals -----
@@ -154,7 +225,7 @@ export function initMotion() {
     gsap.set(revealEls, { opacity: 1, y: 0 })
   } else {
     revealEls.forEach((el) => {
-      gsap.fromTo(
+      const t = gsap.fromTo(
         el,
         { opacity: 0, y: 30 },
         {
@@ -165,6 +236,8 @@ export function initMotion() {
           scrollTrigger: { trigger: el, start: 'top 84%', toggleActions: 'play none none reverse' },
         },
       )
+      tweens.push(t)
+      triggers.push(t.scrollTrigger)
     })
   }
 
@@ -202,11 +275,17 @@ export function initMotion() {
     })
   }
 
-  // Webfonts shift layout after load — recompute trigger positions.
-  const refresh = () => ScrollTrigger.refresh()
+  // Webfonts shift layout after load — recompute trigger positions once.
+  let cancelled = false
+  const refresh = () => {
+    if (!cancelled) ScrollTrigger.refresh()
+  }
   if (document.fonts?.ready) document.fonts.ready.then(refresh)
   window.addEventListener('load', refresh)
-  cleanups.push(() => window.removeEventListener('load', refresh))
+  cleanups.push(() => {
+    cancelled = true
+    window.removeEventListener('load', refresh)
+  })
 
   // ----- Dev hooks -----
   if (import.meta.env.DEV) {
@@ -217,7 +296,8 @@ export function initMotion() {
 
   return () => {
     cleanups.forEach((fn) => fn())
-    ScrollTrigger.getAll().forEach((t) => t.kill())
-    gsap.killTweensOf('*')
+    triggers.forEach((t) => t && t.kill())
+    tweens.forEach((t) => t && t.kill())
+    gsap.ticker.lagSmoothing(500, 33) // restore GSAP default
   }
 }
