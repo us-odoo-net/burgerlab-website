@@ -84,12 +84,29 @@ npm test               # vitest — 23 unit tests (videoMap + cart)
 npm run build -- --base=./
 ```
 
-### Replace the background film
+### Replace / re-frame the background film
 
 ```bash
-# from the parent project root — re-encode any clip to scrub-ready form:
-scripts/swap-bg-video.sh assets/videos/your-clip.mp4   # → website/public/bg.mp4 (all-keyframe)
+# one command generates BOTH scrub-ready films + their matching posters:
+scripts/encode-films.sh path/to/your-clip.mp4
+#  → public/bg.mp4 (desktop) · public/bg-mobile.mp4 · public/img/poster-{desktop,mobile}.webp
 ```
+
+**Tuning the framing ("how far away the burger looks")** — all knobs live in
+one commented block at the top of `scripts/encode-films.sh`:
+
+| Knob | Meaning | Current |
+|---|---|---|
+| `FILM_SCALE_DESKTOP` | film size inside the 16:9 canvas (1.0 = no air, lower = further away) | `0.88` |
+| `CANVAS_MOBILE` | square canvas gives portrait-cover the whole burger (~46% of film width visible vs 26% raw) | `640x640` |
+| `FILM_SCALE_MOBILE` | extra pull-back on top of the square canvas | `1.0` |
+| `CRF_*` / `BLUR` | weight/quality and blur-pad softness | `23/25` · `24` |
+
+The pad around the film is a blurred self-extension (reels pattern), so no
+hard bands appear under the tint. Posters are frame 0 of each film — that is
+what makes the poster→film unveil seamless (no framing jump). Scrub-feel knobs
+(`SEEK_EPSILON_*`, per-mode posters) sit in a commented block at the top of
+`src/motion.js`.
 
 Story beats re-anchor automatically: `motion.js buildVideoMap()` measures the
 pin and CTA positions at runtime, so a different film only needs its three
