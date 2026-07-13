@@ -1,7 +1,7 @@
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
-import { mapTime, sanitizeAnchors } from './videoMap.js'
+import { clampToBuffered, mapTime, sanitizeAnchors } from './videoMap.js'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -44,6 +44,15 @@ function boot() {
       lenis.destroy()
     })
   }
+
+  // ----- Order drawer <-> Lenis (App dispatches a CustomEvent) -----
+  const onDrawerToggle = (e) => {
+    if (!lenis) return
+    if (e.detail?.open) lenis.stop()
+    else lenis.start()
+  }
+  document.addEventListener('burgerlab:drawer', onDrawerToggle)
+  cleanups.push(() => document.removeEventListener('burgerlab:drawer', onDrawerToggle))
 
   // ----- Smooth anchor navigation through Lenis -----
   const onAnchorClick = (e) => {
@@ -143,11 +152,23 @@ function boot() {
       raw.push([maxScroll, dur])
       videoMap = sanitizeAnchors(raw)
     }
+    const bufferedEnd = () => {
+      try {
+        const b = bgVideo.buffered
+        return b.length ? b.end(b.length - 1) : 0
+      } catch {
+        return 0
+      }
+    }
     const updateVideo = () => {
       if (!bgVideo.duration) return
       if (!videoMap) buildVideoMap()
       const scrollTop = window.scrollY || document.documentElement.scrollTop
-      const t = mapTime(videoMap, scrollTop)
+      // Clamp to the buffered range so slow connections still scrub what they
+      // have; the 'progress' listener below catches the frame up as more of
+      // the clip arrives.
+      const t = clampToBuffered(mapTime(videoMap, scrollTop), bufferedEnd())
+      if (t === null) return
       // ~0.84 frame at 24fps: skips sub-frame seeks that repaint nothing.
       if (Math.abs(t - lastVideoT) > 0.035) {
         bgVideo.currentTime = t
@@ -172,10 +193,12 @@ function boot() {
     ScrollTrigger.addEventListener('refresh', remap)
     window.addEventListener('scroll', updateVideo, { passive: true })
     bgVideo.addEventListener('loadedmetadata', remap)
+    bgVideo.addEventListener('progress', updateVideo)
     cleanups.push(() => {
       ScrollTrigger.removeEventListener('refresh', remap)
       window.removeEventListener('scroll', updateVideo)
       bgVideo.removeEventListener('loadedmetadata', remap)
+      bgVideo.removeEventListener('progress', updateVideo)
     })
   }
 

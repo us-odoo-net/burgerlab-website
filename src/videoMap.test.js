@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest'
-import { mapTime, sanitizeAnchors } from './videoMap.js'
+import { clampToBuffered, mapTime, sanitizeAnchors } from './videoMap.js'
+
+describe('clampToBuffered', () => {
+  it('returns null when nothing is buffered yet', () => {
+    expect(clampToBuffered(3, 0)).toBeNull()
+    expect(clampToBuffered(3, null)).toBeNull()
+  })
+
+  it('clamps the seek to just before the buffered end', () => {
+    expect(clampToBuffered(6, 4)).toBeCloseTo(3.9)
+  })
+
+  it('passes the target through when fully buffered', () => {
+    expect(clampToBuffered(2, 8)).toBe(2)
+  })
+
+  it('never returns a negative time', () => {
+    expect(clampToBuffered(5, 0.05)).toBe(0)
+  })
+})
 
 describe('sanitizeAnchors', () => {
   it('keeps strictly increasing anchors untouched', () => {

@@ -12,6 +12,14 @@ export function sanitizeAnchors(raw) {
   return kept
 }
 
+// Clamp a target seek time to what the network already buffered so scrubbing
+// keeps responding on slow connections (frames only render inside buffered
+// ranges; seeking past them freezes on the last decoded frame).
+export function clampToBuffered(t, bufferedEnd) {
+  if (!bufferedEnd || bufferedEnd <= 0) return null
+  return Math.min(t, Math.max(0, bufferedEnd - 0.1))
+}
+
 // Piecewise-linear interpolation over [[scrollY, videoTime], ...] anchors.
 export function mapTime(map, y) {
   if (!map || map.length < 2) return 0

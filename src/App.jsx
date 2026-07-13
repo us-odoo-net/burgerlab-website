@@ -1,16 +1,32 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { addItem, cartCount, cartTotal, removeItem, setQty } from './cart.js'
 import { burgers } from './data/burgers.js'
 import { initMotion } from './motion.js'
 
+const LAB_BURGER = { id: 'lab-burger', name: 'The Lab Burger', price: 14.9 }
+const SIDES = [
+  { id: 'lab-fries', name: 'Lab Fries', price: 3.5 },
+  { id: 'amber-shake', name: 'Amber Shake', price: 4.9 },
+]
+const MENU_ITEMS = [
+  { ...LAB_BURGER, desc: 'The flagship. Flame-grilled, molten cheddar, house sauce.' },
+  ...burgers.map((b) => ({ id: b.id, name: b.name, price: parseFloat(b.price), desc: b.desc })),
+  { ...SIDES[0], desc: 'Twice-cooked, amber-dusted.' },
+  { ...SIDES[1], desc: 'Toasted caramel shake, lab thick.' },
+]
+
 // "Added ✓" feedback is timer-free: the .is-added CSS animation runs once and
 // onAnimationEnd flips the state back (event-driven, no setTimeout).
-function AddButton({ label = 'Add to order', className = '' }) {
+function AddButton({ onAdd, label = 'Add to order', className = '' }) {
   const [added, setAdded] = useState(false)
   return (
     <button
       type="button"
       className={`btn btn--ghost btn--sm ${added ? 'is-added' : ''} ${className}`}
-      onClick={() => setAdded(true)}
+      onClick={() => {
+        setAdded(true)
+        onAdd()
+      }}
       onAnimationEnd={() => setAdded(false)}
       aria-live="polite"
     >
@@ -41,7 +57,7 @@ function FavButton({ name }) {
   )
 }
 
-function Nav() {
+function Nav({ count, onOpenOrder }) {
   return (
     <header className="nav">
       <a className="nav__logo" href="#home">
@@ -53,14 +69,19 @@ function Nav() {
         <a href="#catalog">Menu</a>
         <a href="#experience">Experience</a>
       </nav>
-      <a className="btn btn--primary btn--sm" href="#cta">
+      <button type="button" className="btn btn--primary btn--sm nav__order" onClick={onOpenOrder}>
         Order now
-      </a>
+        {count > 0 && (
+          <span className="nav__badge mono" aria-label={`${count} items in order`}>
+            {count}
+          </span>
+        )}
+      </button>
     </header>
   )
 }
 
-function Hero() {
+function Hero({ onOrderNow, onOpenMenu, onAddLabBurger }) {
   return (
     <section className="hero" id="home">
       <div className="hero__grid">
@@ -75,12 +96,12 @@ function Hero() {
             One flagship burger, engineered layer by layer. Scroll — and watch it come apart.
           </p>
           <div className="hero__actions" data-reveal>
-            <a className="btn btn--primary" href="#cta">
+            <button type="button" className="btn btn--primary" onClick={onOrderNow}>
               Order The Lab Burger
-            </a>
-            <a className="btn btn--ghost" href="#catalog">
+            </button>
+            <button type="button" className="btn btn--ghost" onClick={onOpenMenu}>
               View full menu
-            </a>
+            </button>
           </div>
           <ul className="hero__chips" data-reveal>
             <li>Crafted fresh</li>
@@ -102,7 +123,7 @@ function Hero() {
               <span className="order-card__rating">★ 4.9</span>
               <span>25 min</span>
             </p>
-            <AddButton />
+            <AddButton onAdd={onAddLabBurger} />
           </div>
         </aside>
       </div>
@@ -192,7 +213,7 @@ function Ingredients() {
   )
 }
 
-function Catalog() {
+function Catalog({ onAdd }) {
   return (
     <section className="catalog section" id="catalog">
       <div className="section-head" data-reveal>
@@ -215,7 +236,10 @@ function Catalog() {
                 <span className="burger-card__rating">★ {b.rating}</span>
                 <span className="burger-card__time">{b.time}</span>
               </div>
-              <AddButton className="burger-card__add" />
+              <AddButton
+                className="burger-card__add"
+                onAdd={() => onAdd({ id: b.id, name: b.name, price: parseFloat(b.price) })}
+              />
             </div>
           </article>
         ))}
@@ -232,14 +256,15 @@ const STEPS = [
 
 const CATEGORIES = ['Burgers', 'Sides', 'Shakes', 'Limited runs']
 
-const ORDER_LINES = [
-  { name: 'The Lab Burger', qty: 1, price: 14.9 },
-  { name: 'Lab Fries', qty: 1, price: 3.5 },
-  { name: 'Amber Shake', qty: 1, price: 4.9 },
-]
-
-function Experience() {
-  const total = ORDER_LINES.reduce((s, l) => s + l.qty * l.price, 0)
+function Experience({ cart, onOpenOrder }) {
+  const showcase = cart.length
+    ? cart
+    : [
+        { ...LAB_BURGER, qty: 1 },
+        { ...SIDES[0], qty: 1 },
+        { ...SIDES[1], qty: 1 },
+      ]
+  const total = cartTotal(showcase)
   return (
     <section className="experience section" id="experience">
       <div className="section-head" data-reveal>
@@ -274,12 +299,12 @@ function Experience() {
             <span className="mono summary-card__tag">Lab #0042</span>
           </header>
           <ul className="summary-card__lines">
-            {ORDER_LINES.map((l) => (
-              <li key={l.name}>
+            {showcase.map((l) => (
+              <li key={l.id}>
                 <span>
                   {l.name} <span className="summary-card__qty mono">×{l.qty}</span>
                 </span>
-                <span className="mono">${l.price.toFixed(2)}</span>
+                <span className="mono">${(l.price * l.qty).toFixed(2)}</span>
               </li>
             ))}
           </ul>
@@ -287,8 +312,8 @@ function Experience() {
             <span>Total</span>
             <span className="mono">${total.toFixed(2)}</span>
           </div>
-          <button type="button" className="btn btn--primary summary-card__checkout">
-            Checkout
+          <button type="button" className="btn btn--primary summary-card__checkout" onClick={onOpenOrder}>
+            {cart.length ? 'Review & checkout' : 'Start this order'}
           </button>
           <p className="summary-card__note mono">demo interface — fictional brand</p>
         </aside>
@@ -311,7 +336,7 @@ function Experience() {
   )
 }
 
-function CTA() {
+function CTA({ onOrderNow, onOpenMenu }) {
   return (
     <section className="cta section" id="cta">
       <p className="eyebrow" data-reveal>
@@ -327,12 +352,12 @@ function CTA() {
         The Lab Bundle — burger + fries + shake · <strong>$19.90</strong>
       </p>
       <div className="cta__actions" data-reveal>
-        <a className="btn btn--primary btn--lg" href="#catalog">
+        <button type="button" className="btn btn--primary btn--lg" onClick={onOrderNow}>
           Order The Lab Burger
-        </a>
-        <a className="btn btn--ghost btn--lg" href="#catalog">
+        </button>
+        <button type="button" className="btn btn--ghost btn--lg" onClick={onOpenMenu}>
           View full menu
-        </a>
+        </button>
       </div>
     </section>
   )
@@ -358,27 +383,195 @@ function Footer() {
   )
 }
 
+function Drawer({ open, tab, cart, onTab, onClose, onAdd, onSetQty, onRemove }) {
+  const panelRef = useRef(null)
+  const [placed, setPlaced] = useState(false)
+  const count = cartCount(cart)
+  const total = cartTotal(cart)
+
+  useEffect(() => {
+    if (!open) return undefined
+    setPlaced(false)
+    document.body.classList.add('drawer-open')
+    document.dispatchEvent(new CustomEvent('burgerlab:drawer', { detail: { open: true } }))
+    panelRef.current?.focus()
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.classList.remove('drawer-open')
+      document.dispatchEvent(new CustomEvent('burgerlab:drawer', { detail: { open: false } }))
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div className="drawer-root">
+      <div className="drawer-backdrop" onClick={onClose} aria-hidden="true"></div>
+      <aside
+        className="drawer panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="BurgerLab order"
+        tabIndex={-1}
+        ref={panelRef}
+      >
+        <header className="drawer__head">
+          <div className="drawer__tabs" role="tablist" aria-label="Order sections">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'menu'}
+              className={`drawer__tab mono ${tab === 'menu' ? 'is-active' : ''}`}
+              onClick={() => onTab('menu')}
+            >
+              Menu
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'order'}
+              className={`drawer__tab mono ${tab === 'order' ? 'is-active' : ''}`}
+              onClick={() => onTab('order')}
+            >
+              Your order{count > 0 ? ` (${count})` : ''}
+            </button>
+          </div>
+          <button type="button" className="drawer__close" onClick={onClose} aria-label="Close order panel">
+            ✕
+          </button>
+        </header>
+
+        {tab === 'menu' && (
+          <ul className="drawer__menu">
+            {MENU_ITEMS.map((m) => (
+              <li key={m.id} className="drawer__menu-item">
+                <div>
+                  <h3>{m.name}</h3>
+                  <p>{m.desc}</p>
+                  <span className="mono drawer__price">${m.price.toFixed(2)}</span>
+                </div>
+                <AddButton label="Add" onAdd={() => onAdd(m)} />
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {tab === 'order' && !placed && (
+          <div className="drawer__order">
+            {cart.length === 0 ? (
+              <p className="drawer__empty">
+                Your order is empty. <br />
+                <button type="button" className="btn btn--ghost btn--sm" onClick={() => onTab('menu')}>
+                  Browse the menu
+                </button>
+              </p>
+            ) : (
+              <>
+                <ul className="drawer__lines">
+                  {cart.map((l) => (
+                    <li key={l.id}>
+                      <div className="drawer__line-info">
+                        <span>{l.name}</span>
+                        <span className="mono drawer__price">${(l.price * l.qty).toFixed(2)}</span>
+                      </div>
+                      <div className="drawer__qty" aria-label={`Quantity of ${l.name}`}>
+                        <button type="button" onClick={() => onSetQty(l.id, l.qty - 1)} aria-label="Decrease">
+                          −
+                        </button>
+                        <span className="mono">{l.qty}</span>
+                        <button type="button" onClick={() => onSetQty(l.id, l.qty + 1)} aria-label="Increase">
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          className="drawer__remove"
+                          onClick={() => onRemove(l.id)}
+                          aria-label={`Remove ${l.name}`}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="drawer__total">
+                  <span>Total</span>
+                  <span className="mono">${total.toFixed(2)}</span>
+                </div>
+                <button type="button" className="btn btn--primary drawer__checkout" onClick={() => setPlaced(true)}>
+                  Checkout — ${total.toFixed(2)}
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {tab === 'order' && placed && (
+          <div className="drawer__placed">
+            <span className="drawer__placed-icon" aria-hidden="true">
+              ✓
+            </span>
+            <h3>Order placed</h3>
+            <p>
+              Lab #0042 is firing. Thirty minutes to your door. <br />
+              <span className="mono drawer__note">demo — fictional brand, no real order</span>
+            </p>
+            <button type="button" className="btn btn--ghost" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        )}
+      </aside>
+    </div>
+  )
+}
+
 export default function App() {
+  const [cart, setCart] = useState([])
+  const [drawerTab, setDrawerTab] = useState(null) // null | 'menu' | 'order'
+
   useEffect(() => {
     const cleanup = initMotion()
     return cleanup
   }, [])
+
+  const add = (item) => setCart((c) => addItem(c, item))
+  const openOrder = () => setDrawerTab('order')
+  const openMenu = () => setDrawerTab('menu')
+  const orderLabBurgerNow = () => {
+    setCart((c) => (c.some((l) => l.id === LAB_BURGER.id) ? c : addItem(c, LAB_BURGER)))
+    setDrawerTab('order')
+  }
 
   return (
     <div className="page">
       <div className="progress" aria-hidden="true">
         <span id="progress-bar"></span>
       </div>
-      <Nav />
+      <Nav count={cartCount(cart)} onOpenOrder={openOrder} />
       <main>
-        <Hero />
+        <Hero onOrderNow={orderLabBurgerNow} onOpenMenu={openMenu} onAddLabBurger={() => add(LAB_BURGER)} />
         <Split />
         <Ingredients />
-        <Catalog />
-        <Experience />
-        <CTA />
+        <Catalog onAdd={add} />
+        <Experience cart={cart} onOpenOrder={openOrder} />
+        <CTA onOrderNow={orderLabBurgerNow} onOpenMenu={openMenu} />
       </main>
       <Footer />
+      <Drawer
+        open={drawerTab !== null}
+        tab={drawerTab ?? 'order'}
+        cart={cart}
+        onTab={setDrawerTab}
+        onClose={() => setDrawerTab(null)}
+        onAdd={add}
+        onSetQty={(id, q) => setCart((c) => setQty(c, id, q))}
+        onRemove={(id) => setCart((c) => removeItem(c, id))}
+      />
       <div className="custom-cursor" aria-hidden="true"></div>
     </div>
   )
