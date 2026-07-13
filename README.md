@@ -44,7 +44,7 @@ scrollY ──► videoMap.mapTime(anchors, y) ──► clampToBuffered(t, cont
 |---|---|---|
 | `full` | desktop, no reduced-motion | Lenis smoothing, pinned split, reveals, cursor, scrubbed film |
 | `reduced` | `prefers-reduced-motion: reduce` | **Film still scrubs** (it is user-driven content, not autoplay motion) — smoothing, pinning and decorative animation off |
-| `mobile` | `(hover:none) and (pointer:coarse)` or ≤768px | **Film still scrubs** via a lighter 1.8 MB 640×360 variant (`data-mobile-src`); native touch scroll, no pin/cursor, single-column layout. First touch runs a muted `play()→pause()` to unlock iOS frame rendering |
+| `mobile` | `(hover:none) and (pointer:coarse)` or ≤768px | **Film still scrubs** via a lighter 2.4 MB 640×640 "reels-framed" variant (full 16:9 film centered over a blurred self-extension, so portrait cover shows the whole burger) (`data-mobile-src`); native touch scroll, no pin/cursor, single-column layout. First touch runs a muted `play()→pause()` to unlock iOS frame rendering |
 
 The `pointer:coarse` guard matters: VNC sessions and hybrid touchscreens report
 `hover:none` on real desktops and must keep the full experience.
