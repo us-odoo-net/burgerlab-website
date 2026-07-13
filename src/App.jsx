@@ -1,3 +1,18 @@
+/**
+ * App.jsx — declarative page structure + order-drawer state.
+ *
+ * Reference notes:
+ * - SEPARATION OF CONCERNS: components render markup and hold UI state only;
+ *   cart math lives in cart.js (pure) and all motion/scroll behavior in
+ *   motion.js (single useEffect → initMotion() → cleanup).
+ * - STABLE CALLBACKS: everything passed down is useCallback([]) so the
+ *   Drawer's open-effect (deps [open]) never re-runs on cart re-renders —
+ *   re-running it would steal keyboard focus on every +/− click.
+ * - The Drawer talks to Lenis through a CustomEvent ('burgerlab:drawer')
+ *   instead of importing it: React stays unaware of the motion runtime.
+ * - Micro-interactions are timer-free: "Added ✓" reverts on onAnimationEnd
+ *   of a one-shot CSS animation (event-driven, StrictMode-safe).
+ */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { addItem, cartCount, cartTotal, removeItem, setQty } from './cart.js'
 import { burgers } from './data/burgers.js'

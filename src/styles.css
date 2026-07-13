@@ -1,5 +1,21 @@
 /* ============================================================
    BurgerLab — dark luxury scroll-driven landing
+
+   Layer architecture (fixed background, content scrolls over it):
+     z 0   #bgv           fixed full-screen film, scrubbed by scroll
+     z 1   .bg-tint       radial+linear darkening → text stays readable
+     z 2   .ambient-dots  amber accent dots · .grain film texture
+     z 10  .page (#root)  React sections
+     z 20  .floating-ui   order card / summary card
+     z 50  .nav           fixed header (blur only when scrolled)
+     z 60  .progress      scroll progress bar
+     z 90  .drawer-backdrop · z 95 .drawer   order dialog
+     z 100 .custom-cursor  desktop-only ring
+     z 200 .preloader     load gate until the film can play through
+
+   Performance rules baked in: no static will-change (GPU layers only while
+   animating), grain without mix-blend-mode, backdrop-filter only on the nav,
+   media behind the tint so contrast survives any frame.
    ============================================================ */
 
 :root {

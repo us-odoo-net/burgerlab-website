@@ -1,4 +1,13 @@
-// Pure scroll→video-time mapping used by motion.js. No DOM here — unit-testable.
+/**
+ * videoMap.js — pure math for the scroll-scrubbed background film.
+ *
+ * Reference notes: everything here is DOM-free and unit-tested (see
+ * videoMap.test.js). motion.js feeds it scroll anchors measured from the live
+ * layout ([pin start → separation begins], [pin end → fully exploded],
+ * [CTA enter → reassembly]) and it answers "what film timestamp belongs to
+ * this scroll position". Keeping this pure is what made TDD catch a real
+ * monotonicity bug (see sanitizeAnchors) before any user could.
+ */
 
 // Keep only anchors whose scroll position strictly increases (>1px apart).
 // Compares against the last KEPT anchor, not the raw predecessor — otherwise a

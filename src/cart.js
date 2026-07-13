@@ -1,4 +1,12 @@
-// Pure cart logic (immutable) — UI state lives in React, math lives here.
+/**
+ * cart.js — pure, immutable order-cart logic (unit-tested in cart.test.js).
+ *
+ * Reference notes: React owns only `useState(lines)`; every mutation goes
+ * through these pure functions inside functional updaters
+ * (`setCart(c => addItem(c, item))`). Purity makes them idempotent under
+ * React StrictMode's double-invoked updaters and trivially testable —
+ * the UI cannot corrupt cart math and the math needs no UI to be verified.
+ */
 
 export function addItem(lines, item) {
   const existing = lines.find((l) => l.id === item.id)

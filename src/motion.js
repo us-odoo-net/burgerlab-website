@@ -1,3 +1,25 @@
+/**
+ * motion.js — all scroll/motion wiring for the BurgerLab landing.
+ *
+ * Architecture (reference notes):
+ * - SINGLE ENTRY: App calls initMotion() once; it returns a full teardown.
+ *   Everything DOM/event/GSAP lives here — React components stay declarative.
+ * - BOOT/TEARDOWN PATTERN: boot() builds the whole motion graph and returns
+ *   its own teardown; crossing the mobile breakpoint tears down and re-boots
+ *   (pin spacers, video scrub and cursor are mode-dependent). This is what
+ *   makes the page resilient to resize/DevTools/orientation changes.
+ * - VIDEO SCRUB: scroll position → piecewise map (videoMap.js, pure+tested)
+ *   → clamp to buffered range → <video>.currentTime. The clip is encoded
+ *   all-keyframe (every frame an I-frame) so seeks are O(1) and exact.
+ * - MODES: 'full' (Lenis smoothing + pin + reveals + cursor), 'reduced'
+ *   (prefers-reduced-motion: scrub stays ON — it is user-driven content, not
+ *   autoplay motion — smoothing/pin/decoration off), 'mobile' (static poster,
+ *   no video download at all). Mode is stamped on <html data-motion> for
+ *   one-line remote diagnosis.
+ * - OWNERSHIP: every ScrollTrigger/tween/listener created here is tracked and
+ *   killed by THIS module's teardown — no global GSAP sweeps, so it composes
+ *   safely with any other GSAP code on the page.
+ */
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import Lenis from 'lenis'
