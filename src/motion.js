@@ -345,10 +345,15 @@ function boot() {
     window.removeEventListener('load', refresh)
   })
 
-  // ----- Debug hooks (kept in prod: harmless, enable remote diagnosis) -----
-  window.__lenis = lenis
-  window.__ST = ScrollTrigger
+  // ----- Debug hooks -----
+  // __bgv stays in prod: it equals document.querySelector('#bgv') (no extra
+  // exposure) and enables one-line remote diagnosis. Runtime internals are
+  // dev-only per the original guidelines.
   window.__bgv = bgVideo
+  if (import.meta.env.DEV) {
+    window.__lenis = lenis
+    window.__ST = ScrollTrigger
+  }
 
   return () => {
     cleanups.forEach((fn) => fn())

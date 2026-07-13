@@ -611,6 +611,9 @@ export default function App() {
 
   return (
     <div className="page">
+      <a className="skip-link" href="#catalog">
+        Skip to menu
+      </a>
       <div className="progress" aria-hidden="true">
         <span id="progress-bar"></span>
       </div>

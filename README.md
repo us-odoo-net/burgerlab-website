@@ -128,6 +128,21 @@ document.documentElement.dataset.motion   // 'full' | 'reduced' | 'mobile'
 __bgv.readyState + ' / ' + __bgv.currentTime
 ```
 
+## Deliberate tradeoffs / future enhancements
+
+- **Film length**: the 8s clip compresses the "hold" stretches (ingredients/
+  catalog advance few frames per viewport). A 12-16s regeneration fixes it
+  (paid — cost-gated). A free alternative: subtle scroll parallax on card
+  media — but note those elements use CSS `transform` transitions on hover,
+  and GSAP inline transforms override CSS transitions; migrate the hovers to
+  GSAP first if you attempt it.
+- **`dist/` is committed** and the Dockerfile copies it (no CI build): fast,
+  reproducible deploys at the cost of discipline — always rebuild before
+  committing `src/` changes. A CI step (build + vitest on push) is the natural
+  next hardening.
+- **Single bundle** (no `manualChunks`): fine for a one-pager; split vendor
+  chunks if this grows.
+
 ## Gotchas worth stealing
 
 - `add_header` inside an nginx `location` **discards** all inherited headers — repeat security headers wherever you add `Cache-Control`.
