@@ -12,7 +12,7 @@
 # FILM_SCALE → burger más lejos, más blur-pad visible alrededor.
 #
 CANVAS_DESKTOP="960x540"   # lienzo 16:9 del film desktop
-FILM_SCALE_DESKTOP="0.88"  # 1.0 = sin aire (film a lienzo completo); 0.88 = ~12% de aire
+FILM_SCALE_DESKTOP="0.80"  # 1.0 = sin aire (film a lienzo completo); 0.80 = ~20% de aire
 CRF_DESKTOP="23"           # calidad desktop (18 = más nítido/pesado, 26 = más liviano)
 #
 CANVAS_MOBILE="640x640"    # lienzo CUADRADO: en portrait-cover muestra ~46% del
