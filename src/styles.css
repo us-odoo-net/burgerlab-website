@@ -1519,10 +1519,16 @@ body.drawer-open {
 }
 
 @media (hover: none) and (pointer: coarse), (max-width: 768px) {
-  /* The film stays (lighter 640×360 variant loaded by motion.js) — only
+  /* The film stays (lighter reels-framed variant loaded by motion.js) — only
      pin, HUD labels and cursor are dropped on mobile. */
   .nav__links {
     display: none;
+  }
+
+  /* Mobile backdrop-filter support is inconsistent: a near-opaque nav keeps
+     scrolling content (bundle chip, headings) from colliding with the logo. */
+  .nav--scrolled {
+    background: rgba(16, 16, 15, 0.94);
   }
 
   .catalog__grid {
