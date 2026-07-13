@@ -5,7 +5,9 @@ import { clampToBuffered, mapTime, sanitizeAnchors } from './videoMap.js'
 
 gsap.registerPlugin(ScrollTrigger)
 
-const MOBILE_MQ = '(hover: none), (max-width: 768px)'
+// pointer:coarse guards against desktops that report hover:none (VNC, hybrid
+// touchscreens) — those must keep the full experience.
+const MOBILE_MQ = '(hover: none) and (pointer: coarse), (max-width: 768px)'
 
 // Re-runs the whole motion setup when the viewport crosses the mobile
 // breakpoint (pin spacers, video scrub and cursor are mode-dependent).
@@ -30,6 +32,9 @@ function boot() {
   const cleanups = []
   const triggers = [] // ScrollTriggers owned by this boot
   const tweens = [] // tweens/timelines owned by this boot
+
+  // Diagnosable from any browser console: document.documentElement.dataset.motion
+  document.documentElement.dataset.motion = reduced ? 'reduced' : isMobile ? 'mobile' : 'full'
 
   // ----- Lenis <-> GSAP wiring -----
   let lenis = null
@@ -100,7 +105,7 @@ function boot() {
   const bgVideo = document.querySelector('#bgv')
   const hidePreloader = () => preloader && preloader.classList.add('preloader--done')
   if (preloader && !preloader.classList.contains('preloader--done')) {
-    if (bgVideo && !isMobile && !reduced) {
+    if (bgVideo && !isMobile) {
       bgVideo.preload = 'auto'
       const onProgress = () => {
         try {
@@ -134,9 +139,12 @@ function boot() {
   // Piecewise scroll→time map so the story beats land on the right sections:
   // hero=assembled, split pin=full separation, ingredients/catalog=hold
   // exploded, experience→cta=reassembly. Pure math lives in videoMap.js.
+  // The scrub is user-driven content (scroll = film position), not autoplay
+  // motion — so it stays ON under prefers-reduced-motion; only smoothing,
+  // pinning and decorative animations are dropped there.
   let lastVideoT = -1
   let videoMap = null
-  if (bgVideo && !isMobile && !reduced) {
+  if (bgVideo && !isMobile) {
     const buildVideoMap = () => {
       const dur = (bgVideo.duration || 8) - 0.05
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight
@@ -310,12 +318,10 @@ function boot() {
     window.removeEventListener('load', refresh)
   })
 
-  // ----- Dev hooks -----
-  if (import.meta.env.DEV) {
-    window.__lenis = lenis
-    window.__ST = ScrollTrigger
-    window.__bgv = bgVideo
-  }
+  // ----- Debug hooks (kept in prod: harmless, enable remote diagnosis) -----
+  window.__lenis = lenis
+  window.__ST = ScrollTrigger
+  window.__bgv = bgVideo
 
   return () => {
     cleanups.forEach((fn) => fn())
