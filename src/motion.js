@@ -122,26 +122,37 @@ function boot() {
   }
 
   // ----- Preloader + video load gate -----
-  // Video ships with preload="none" so mobile never downloads it (it is
-  // display:none there). Desktop starts the download here, behind the
-  // preloader, and reveals the page when the clip can play through.
+  // Video ships with preload="none"; every mode starts its download here
+  // behind the preloader (mobile gets the 640×360 variant chosen below).
+  // Save-Data/2G users skip the film entirely and keep the poster.
   const preloader = document.getElementById('preloader')
   const fill = document.getElementById('preloader-fill')
   const bgVideo = document.querySelector('#bgv')
   const hidePreloader = () => preloader && preloader.classList.add('preloader--done')
   // Mobile scrubs too (owner decision superseding the original guideline's
   // static-poster fallback): a 1.8MB 640×360 variant keeps data cost low.
-  // lastVideoT is (re)declared fresh in the scrub block of this same boot,
-  // so a src swap needs no extra state reset.
-  if (bgVideo) {
+  // Explicit Save-Data / 2G signals win: those users keep the poster.
+  // lastVideoT is (re)declared fresh in the scrub block of this same boot, so
+  // a src swap needs no extra state reset. Known accepted edge: a breakpoint
+  // re-boot swaps src after the preloader is gone — buffered resets and the
+  // frame catches up via the 'progress' listener (desktop-resize-only path).
+  const conn = navigator.connection
+  const dataSaver = !!(conn && (conn.saveData || /(^|-)2g$/.test(conn.effectiveType || '')))
+  if (bgVideo && !dataSaver) {
     const wantedSrc = isMobile && bgVideo.dataset.mobileSrc ? bgVideo.dataset.mobileSrc : 'bg.mp4'
-    if (!bgVideo.currentSrc || !bgVideo.currentSrc.endsWith(wantedSrc)) {
+    // Compare the full basename ('/x.mp4'): a bare endsWith would break
+    // silently for names where one file is a suffix of the other.
+    const current = bgVideo.currentSrc || ''
+    if (!current.endsWith('/' + wantedSrc)) {
       bgVideo.src = wantedSrc
     }
   }
+  if (dataSaver) {
+    document.documentElement.dataset.motion += '-datasaver'
+  }
 
   if (preloader && !preloader.classList.contains('preloader--done')) {
-    if (bgVideo) {
+    if (bgVideo && !dataSaver) {
       bgVideo.preload = 'auto'
       const onProgress = () => {
         try {
@@ -178,9 +189,10 @@ function boot() {
   // The scrub is user-driven content (scroll = film position), not autoplay
   // motion — so it stays ON in ALL modes: reduced-motion drops only
   // smoothing/pin/decoration, and mobile just loads the lighter variant.
+  // Save-Data users have no film loaded, so no scrub machinery either.
   let lastVideoT = -1
   let videoMap = null
-  if (bgVideo) {
+  if (bgVideo && !dataSaver) {
     const buildVideoMap = () => {
       const dur = (bgVideo.duration || 8) - 0.05
       const maxScroll = document.documentElement.scrollHeight - window.innerHeight
@@ -241,13 +253,20 @@ function boot() {
     bgVideo.addEventListener('loadedmetadata', remap)
     bgVideo.addEventListener('progress', updateVideo)
     // iOS renders no frames on a never-played video: a muted play()→pause()
-    // on the first touch (a user gesture) unlocks seek rendering. No-op on
-    // Android/desktop.
+    // inside a touch gesture unlocks seek rendering. NOT {once}: play() can
+    // reject while the clip has no data yet (early tap, slow network) and a
+    // consumed listener would leave iOS frozen for the whole session — so it
+    // re-arms on every touch and only removes itself after a successful play.
     const iosUnlock = () => {
       const p = bgVideo.play()
-      if (p && p.then) p.then(() => bgVideo.pause()).catch(() => {})
+      if (p && p.then) {
+        p.then(() => {
+          bgVideo.pause()
+          window.removeEventListener('touchstart', iosUnlock)
+        }).catch(() => {})
+      }
     }
-    window.addEventListener('touchstart', iosUnlock, { once: true, passive: true })
+    window.addEventListener('touchstart', iosUnlock, { passive: true })
     cleanups.push(() => {
       ScrollTrigger.removeEventListener('refresh', remap)
       window.removeEventListener('scroll', updateVideo)
