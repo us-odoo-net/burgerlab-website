@@ -26,6 +26,10 @@ import Lenis from 'lenis'
 import { clampToBuffered, contiguousBufferedEnd, mapTime, sanitizeAnchors } from './videoMap.js'
 
 gsap.registerPlugin(ScrollTrigger)
+// Mobile URL-bar collapse fires height-only resizes on every scroll-direction
+// flip; without this, each one triggers a full refresh → film remap + pin
+// re-measure = visible jumps. Real (width) resizes still refresh normally.
+ScrollTrigger.config({ ignoreMobileResize: true })
 
 // pointer:coarse guards against desktops that report hover:none (VNC, hybrid
 // touchscreens) — those must keep the full experience.
@@ -255,15 +259,20 @@ function boot() {
     }
     // rAF-coalesced: touch scrolling fires 'scroll' at high frequency and a
     // seek per EVENT janks mid-range phones — at most one seek per rendered
-    // frame is all a human can see anyway.
+    // frame is all a human can see anyway. rAF alone stalls in occluded /
+    // throttled tabs (no frames → no callback → frozen film), so a short
+    // timeout acts as fallback; the pending flag keeps them mutually exclusive.
     let videoRafPending = false
+    const runVideoUpdate = () => {
+      if (!videoRafPending) return
+      videoRafPending = false
+      doVideoUpdate()
+    }
     const updateVideo = () => {
       if (videoRafPending) return
       videoRafPending = true
-      requestAnimationFrame(() => {
-        videoRafPending = false
-        doVideoUpdate()
-      })
+      requestAnimationFrame(runVideoUpdate)
+      setTimeout(runVideoUpdate, 120) // # oneshot fallback, coalesced by flag
     }
     cleanups.push(() => {
       disposed = true
@@ -365,7 +374,14 @@ function boot() {
           y: 0,
           duration: 0.9,
           ease: 'power3.out',
-          scrollTrigger: { trigger: el, start: 'top 84%', toggleActions: 'play none none reverse' },
+          scrollTrigger: {
+            trigger: el,
+            start: 'top 84%',
+            // Mobile: once revealed, stay — reversing on upward swipes reads
+            // as "content reloading" on touch. Desktop keeps the cinematic
+            // reverse.
+            toggleActions: isMobile ? 'play none none none' : 'play none none reverse',
+          },
         },
       )
       tweens.push(t)
